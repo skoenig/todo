@@ -8,24 +8,20 @@ Modified version of http://todo-py.googlecode.com/svn/trunk/todo_cron.py
 """
 
 import re
-import sys
 import os
 import time
 import logging
 import argparse
 
-TODO_DIR = '.'
+TODO_DIR = '/home/skoenig/wiki/todo'
 
 logging.basicConfig(format='%(asctime)-15s %(levelname)s %(module)s: %(message)s')
 log = logging.getLogger(__name__)
 
-def help():
-    text = \
+DESCRIPTION = \
         """
-Usage: todo_cron.py [options]
-
 Adds tasks from recur.txt that match today's date to todo.txt file
-Example crontab entry: 00 05 * * * /home/user/bin/todo_cron.py
+Example crontab entry: 00 05 * * * /home/user/bin/recur.py
 
 Date format based on that used by remind:
 
@@ -39,9 +35,6 @@ Date format based on that used by remind:
 {Dec 01 +3} Add task 5 days before specified date
 
 """
-    print text
-    sys.exit()
-
 
 def set_dirs(dir):
     global RECUR_FILE, RECUR_BACKUP, TODO_FILE
@@ -55,7 +48,7 @@ def set_dirs(dir):
 
 def single_day(rem, today):
     """Single Day - recur every month on this date eg. {22}"""
-    
+
     if rem.isdigit():
         event = time.strptime(rem, '%d')
         if event.tm_mday == today.tm_mday:
@@ -169,7 +162,7 @@ def multi_day(rem, today):
     return True, False
 
 
-def parse_rem(rem):
+def parse_rem(rem, today):
     """parses REM style date strings - returns True if event is today"""
 
     # 1st DayOfWeek after date
@@ -185,7 +178,6 @@ def parse_rem(rem):
     # {AT 5:00PM}
 
     log.debug('try to parse "%s"' % rem)
-    today = time.localtime()
 
     warnDays, newrem = has_warning(rem, today)
     if warnDays:
@@ -235,21 +227,22 @@ def parse_rem(rem):
 
 def add_today_tasks(file):
     """Add tasks occuring today from a file to the todo list"""
-
+    today = time.localtime()
+    today_date = time.strftime('%F' , time.localtime())
     rem = get_dict(file)
     for k, v in rem.iteritems():
         log.info('processing item [%s] = %s' % (k, v))
         re_date = re.compile(r"{([^}]+)}")
         date = re.search(re_date, k)
         if date:
-            isToday = parse_rem(date.group(1))  # date.group(1) = date in Remind format: Wed, 18 +3, Jan 26 +4
+            isToday = parse_rem(date.group(1), today)  # date.group(1) = date in Remind format: Wed, 18 +3, Jan 26 +4
             if isToday:
-                for task in k:
+                for task in v:
                     #if task_exists(task):
                     #    log.info('task exists: %s' % task)
                     #    continue
-                    log.info('adding task %s on %s' % (task,date))
-                    add_task(task,date)
+                    log.info('adding task %s' % (task))
+                    add_task(task, today_date)
         else:
             log.info('unable to parse date from "%s %s"' % (k, v))
 
@@ -281,7 +274,7 @@ def get_dict(file):
 
 def add_task(task, date):
     with open(TODO_FILE, 'a') as fd:
-        fd.write('%s t:%s' % (task, date))
+        fd.write('%s t:%s\n' % (task, date))
 
 def get_task_dict():
     # @TODO: parse todo.txt 
@@ -291,7 +284,7 @@ def get_task_dict():
             pass
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='')
+    parser = argparse.ArgumentParser(description=DESCRIPTION, formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument('-v', '--verbose', help='increase verbosity', action='count')
     parser.add_argument('-u', '--usage', help='print usage', action='store_true')
     parser.add_argument('-d', '--todo_dir', help='Specify TODO_DIR from command line')
